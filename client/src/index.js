@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { AssetResolver } from './AssetResolver.js';
+import { PhysicsEngine } from './PhysicsEngine.js';
 
 export class Scene {
   constructor(canvas = null) {
     this.entities = new Map();
     this.assetResolver = new AssetResolver(this);
+    this.physics = new PhysicsEngine();
     
     // 1. Setup Three.js Core
     this.scene = new THREE.Scene();
@@ -128,11 +130,15 @@ export const NitroXR = {
   Scene,
   Cloud,
   onUpdate: (callback) => {
-    // Standard 60fps loop
     const tick = () => {
+      const now = Date.now();
+      const deltaTime = (tick.lastTime) ? (now - tick.lastTime) / 1000 : 0.016;
+      tick.lastTime = now;
+
       callback({ 
         forward: false, backward: false, left: false, right: false,
-        timestamp: Date.now() 
+        deltaTime: deltaTime,
+        timestamp: now 
       });
       requestAnimationFrame(tick);
     };
