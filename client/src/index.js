@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import { AssetResolver } from './AssetResolver.js';
 
 export class Scene {
   constructor(canvas = null) {
     this.entities = new Map();
+    this.assetResolver = new AssetResolver(this);
     
     // 1. Setup Three.js Core
     this.scene = new THREE.Scene();
@@ -33,38 +35,39 @@ export class Scene {
     console.log("NitroXR: Visual Scene initialized with Three.js");
   }
 
-  createEntity(id, props = {}) {
+  async createEntity(id, props = {}) {
     const { position = [0, 0, 0], model = 'cube', material = 'default', scale = [1, 1, 1] } = props;
 
-    // Create visual representation
-    let geometry;
-    if (model === 'cube') geometry = new THREE.BoxGeometry(1, 1, 1);
-    else if (model === 'sphere') geometry = new THREE.SphereGeometry(0.5, 32, 32);
-    else geometry = new THREE.BoxGeometry(1, 1, 1); // Fallback
-
-    const materialObj = new THREE.MeshStandardMaterial({ color: 0x808080 });
-    const mesh = new THREE.Mesh(geometry, materialObj);
+    // Resolve asset if it's a string ID
+    let visualModel;
+    if (typeof model === 'string' && model !== 'cube' && model !== 'sphere') {
+      const asset = await this.assetResolver.resolve(model);
+      visualModel = asset.model.clone();
+    } else {
+      if (model === 'cube') visualModel = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x808080 }));
+      else if (model === 'sphere') visualModel = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), new THREE.MeshStandardMaterial({ color: 0x808080 }));
+      else visualModel = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x808080 }));
+    }
     
-    mesh.position.set(...position);
-    mesh.scale.set(...scale);
-    mesh.name = id;
+    visualModel.position.set(...position);
+    visualModel.scale.set(...scale);
+    visualModel.name = id;
 
-    this.scene.add(mesh);
+    this.scene.add(visualModel);
 
-    // Create the "Brain" entity that links to the "Body" mesh
     const entity = {
       id,
       position,
       model,
       material,
-      mesh,
+      mesh: visualModel,
       setPosition: (pos) => {
         entity.position = pos;
-        mesh.position.set(...pos);
+        visualModel.position.set(...pos);
       },
       update: (newProps) => {
         Object.assign(entity, newProps);
-        if (newProps.position) mesh.position.set(...newProps.position);
+        if (newProps.position) visualModel.position.set(...newProps.position);
       }
     };
 
