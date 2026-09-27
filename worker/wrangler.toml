@@ -22,4 +22,4 @@ bucket_name = "nitroxr-games-assets"
 [vars]
 # Public base URL for R2 assets (custom domain or r2.dev). Seed registry
 # entries are templated against this value.
-ASSET_BASE_URL = "https://game-assets.nitroxr.com"
+ASSET_BASE_URL = "https://games-assets.nitroxr.com"
