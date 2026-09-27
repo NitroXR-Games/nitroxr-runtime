@@ -119,6 +119,8 @@ export default {
       }
       const entry = {
         type: body.type || 'model',
+        org: body.org || 'nitroxr-games',
+        game: body.game || body.gameId || 'maze',
         glb_url: body.glb_url || body.model_url || null,
         texture_url: body.texture_url || null,
         properties: body.properties || {},
