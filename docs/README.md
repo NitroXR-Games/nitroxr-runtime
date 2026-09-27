@@ -85,9 +85,14 @@ scene.startLoop((input) => {
 
 NitroXR uses **Asset IDs** instead of file paths.
 
-1. **Upload**: Upload your `.glb` model to Cloudflare R2.
-2. **Register**: Add the ID $\to$ URL mapping in the Cloud Registry (KV/D1).
+1. **Upload**: Upload your `.glb` model to Cloudflare R2 under your namespace:
+   `{org}/{game}/models/...` (e.g. `nitroxr-games/maze/models/wall_plain.glb`).
+2. **Register**: Add the ID $\to$ URL mapping in the Cloud Registry (KV/D1),
+   including `org` + `game` (default: `nitroxr-games`/`maze`).
 3. **Reference**: Use the ID in your code: `model: 'my_custom_model'`.
+
+Multi-tenant key layout: `games-assets.nitroxr.com/{org}/{game}/{kind}/{file}`.
+Two orgs/games can never collide because the namespace is part of the URL.
 
 The `AssetResolver` handles the streaming, caching, and PBR material application automatically.
 
