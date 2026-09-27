@@ -175,11 +175,20 @@ export class Scene {
 export class Cloud {
   static endpoint = 'https://api.nitroxr.io';
 
+  static setEndpoint(endpoint) {
+    this.endpoint = endpoint;
+  }
+
   static async submit(data) {
+    return this.submitScore(data.userId, data.value ?? data.score, data.gameId);
+  }
+
+  static async submitScore(userId, value, gameId = 'maze') {
     try {
       const response = await fetch(`${this.endpoint}/submit`, {
         method: 'POST',
-        body: JSON.stringify(data)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, value, gameId })
       });
       return await response.json();
     } catch (e) {
@@ -188,9 +197,56 @@ export class Cloud {
     }
   }
 
-  static async getGhost(userId) {
+  static async getLeaderboard(gameId = 'maze', limit = 10) {
     try {
-      const response = await fetch(`${this.endpoint}/ghost/${userId}`);
+      const response = await fetch(`${this.endpoint}/leaderboard/${encodeURIComponent(gameId)}?limit=${limit}`);
+      return await response.json();
+    } catch (e) {
+      console.error("Cloud leaderboard fetch failed:", e);
+      return { gameId, scores: [] };
+    }
+  }
+
+  static async resolveAsset(assetId) {
+    const response = await fetch(`${this.endpoint}/assets/${encodeURIComponent(assetId)}`);
+    if (!response.ok) throw new Error(`Asset ${assetId} not found (${response.status})`);
+    return response.json();
+  }
+
+  static async listAssets() {
+    try {
+      const response = await fetch(`${this.endpoint}/assets`);
+      return await response.json();
+    } catch (e) {
+      console.error("Cloud asset list failed:", e);
+      return { assets: [] };
+    }
+  }
+
+  static async registerAsset(entry) {
+    const response = await fetch(`${this.endpoint}/assets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    });
+    if (!response.ok) throw new Error(`Asset registration failed (${response.status})`);
+    return response.json();
+  }
+
+  static async submitGhost(userId, path, gameId = 'maze') {
+    const response = await fetch(`${this.endpoint}/ghost/${encodeURIComponent(userId)}?gameId=${encodeURIComponent(gameId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId, path })
+    });
+    if (!response.ok) throw new Error(`Ghost submit failed (${response.status})`);
+    return response.json();
+  }
+
+  static async getGhost(userId, gameId = 'maze') {
+    try {
+      const response = await fetch(`${this.endpoint}/ghost/${encodeURIComponent(userId)}?gameId=${encodeURIComponent(gameId)}`);
+      if (!response.ok) return null;
       return await response.json();
     } catch (e) {
       console.error("Cloud ghost fetch failed:", e);
