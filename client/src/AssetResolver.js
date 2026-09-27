@@ -38,6 +38,15 @@ export class AssetResolver {
       const metadata = await response.json();
       const { glb_url, properties = {} } = metadata;
 
+      // Registry entry without a binary yet (e.g. seed templates before R2
+      // upload): use the fallback primitive instead of erroring the loop.
+      if (!glb_url) {
+        const asset = { model: this.createFallbackModel(), metadata };
+        this.cache.set(assetId, asset);
+        resolve(asset);
+        return;
+      }
+
       // 2. Stream the GLB from R2/CDN
       const gltf = await this.loader.loadAsync(glb_url);
       const model = gltf.scene;

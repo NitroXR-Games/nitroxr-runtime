@@ -91,6 +91,36 @@ NitroXR uses **Asset IDs** instead of file paths.
 
 The `AssetResolver` handles the streaming, caching, and PBR material application automatically.
 
+## 3b. Cloud API (Lap 5)
+
+The Worker (`worker/index.js`) exposes the Body over HTTP with CORS enabled:
+
+- `GET /health` — liveness probe
+- `GET /assets` — list registry (KV overrides + seeds)
+- `GET /assets/:id` — resolve one asset to `{ glb_url, texture_url, properties }`
+- `POST /assets` — register/update an entry (AI pipeline writes here)
+- `POST /submit` — `{ userId, value, gameId }` score submit
+- `GET /leaderboard/:gameId?limit=` — top scores, sorted desc
+- `POST /ghost/:userId?gameId=` — `{ path }` ghost upload
+- `GET /ghost/:userId?gameId=` — ghost download (404 when absent)
+
+The SDK mirrors these in `NitroXR.Cloud`: `setEndpoint`,
+`resolveAsset`, `listAssets`, `registerAsset`, `submitScore`,
+`getLeaderboard`, `submitGhost`, `getGhost`. Point the client at
+your deployment before booting:
+
+```javascript
+NitroXR.Cloud.setEndpoint('https://nitroxr-runtime-worker.<you>.workers.dev');
+```
+
+### Deploy checklist (Cloudflare free tier)
+
+1. `wrangler kv:namespace create NITRO_KV` → put the id in `worker/wrangler.toml`
+2. `wrangler r2 bucket create nitro-assets` → upload `.glb`/textures
+3. Set `ASSET_BASE_URL` in `worker/wrangler.toml` to the public R2 base
+4. `wrangler deploy` from `worker/`
+5. Optional: seed/override entries via `POST /assets`
+
 ## 4. Performance Guardrails
 
 To prevent motion sickness in XR, the engine enforces:
