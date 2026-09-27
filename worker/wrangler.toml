@@ -2,6 +2,19 @@ name = "nitroxr-runtime-worker"
 main = "index.js"
 compatibility_date = "2024-01-01"
 
+# KV: asset registry overrides (asset:<id>), scores (score:<game>:<user>),
+# ghost paths (ghost:<game>:<user>). Create with:
+#   wrangler kv:namespace create NITRO_KV
 [[kv_namespaces]]
 binding = "NITRO_KV"
-id = "your-kv-namespace-id"
+id = "05197eb68373478683b9080d6f487925"
+
+# R2: binary .glb + texture storage (free tier: 10GB).
+[[r2_buckets]]
+binding = "NITRO_ASSETS"
+bucket_name = "nitroxr-games-assets"
+
+[vars]
+# Public base URL for R2 assets (custom domain or r2.dev). Seed registry
+# entries are templated against this value.
+ASSET_BASE_URL = "https://assets.nitroxr.io"

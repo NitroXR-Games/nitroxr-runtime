@@ -46,6 +46,40 @@ The interface to the Cloud Body.
 
 ### `NitroXR.onUpdate(callback)`
 The deterministic heartbeat. Runs at the display's refresh rate.
+For XR headsets, prefer `scene.startLoop(callback)` which uses
+`renderer.setAnimationLoop` so frames stay synced in immersive mode.
+
+## 2b. Input Bridge (Lap 4)
+
+`scene.getInput()` (or the `input` argument in loop callbacks) merges
+desktop and XR input into one object:
+
+- `forward/backward/left/right`: booleans (WASD/arrows or thumbstick)
+- `moveX/moveZ`: analog axes in -1..1
+- `interact/shoot/reload/changeAvatar`: action buttons
+  (keyboard: E/Space/Enter = interact; XR: trigger = shoot,
+  grip = reload, stick-click = interact)
+- `toggleEditor`: debug key T
+- `xrActive`: true while an immersive session is presenting
+- `deltaTime/timestamp`: frame timing
+
+Locomotion moves `scene.rig`, never the camera directly — the headset
+owns the camera pose. Example:
+
+```javascript
+scene.startLoop((input) => {
+  const speed = 2 * input.deltaTime;
+  if (input.forward) scene.moveRig(0, -speed);
+  if (input.backward) scene.moveRig(0, speed);
+  if (input.left) scene.moveRig(-speed, 0);
+  if (input.right) scene.moveRig(speed, 0);
+  scene.update(input.deltaTime);
+});
+
+// Enter immersive VR (must be called from a user gesture):
+// await scene.inputBridge.enterXR();
+// Or add the default button: await scene.enableVRButton();
+```
 
 ## 3. Asset Pipeline
 
@@ -56,6 +90,36 @@ NitroXR uses **Asset IDs** instead of file paths.
 3. **Reference**: Use the ID in your code: `model: 'my_custom_model'`.
 
 The `AssetResolver` handles the streaming, caching, and PBR material application automatically.
+
+## 3b. Cloud API (Lap 5)
+
+The Worker (`worker/index.js`) exposes the Body over HTTP with CORS enabled:
+
+- `GET /health` — liveness probe
+- `GET /assets` — list registry (KV overrides + seeds)
+- `GET /assets/:id` — resolve one asset to `{ glb_url, texture_url, properties }`
+- `POST /assets` — register/update an entry (AI pipeline writes here)
+- `POST /submit` — `{ userId, value, gameId }` score submit
+- `GET /leaderboard/:gameId?limit=` — top scores, sorted desc
+- `POST /ghost/:userId?gameId=` — `{ path }` ghost upload
+- `GET /ghost/:userId?gameId=` — ghost download (404 when absent)
+
+The SDK mirrors these in `NitroXR.Cloud`: `setEndpoint`,
+`resolveAsset`, `listAssets`, `registerAsset`, `submitScore`,
+`getLeaderboard`, `submitGhost`, `getGhost`. Point the client at
+your deployment before booting:
+
+```javascript
+NitroXR.Cloud.setEndpoint('https://nitroxr-runtime-worker.<you>.workers.dev');
+```
+
+### Deploy checklist (Cloudflare free tier)
+
+1. `wrangler kv:namespace create NITRO_KV` → put the id in `worker/wrangler.toml`
+2. `wrangler r2 bucket create nitro-assets` → upload `.glb`/textures
+3. Set `ASSET_BASE_URL` in `worker/wrangler.toml` to the public R2 base
+4. `wrangler deploy` from `worker/`
+5. Optional: seed/override entries via `POST /assets`
 
 ## 4. Performance Guardrails
 
