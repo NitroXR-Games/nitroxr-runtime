@@ -7,7 +7,7 @@ compatibility_date = "2024-01-01"
 #   wrangler kv:namespace create NITRO_KV
 [[kv_namespaces]]
 binding = "NITRO_KV"
-id = "your-kv-namespace-id"
+id = "05197eb68373478683b9080d6f487925"
 
 # R2: binary .glb + texture storage (free tier: 10GB).
 [[r2_buckets]]
