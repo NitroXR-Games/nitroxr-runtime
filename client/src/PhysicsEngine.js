@@ -14,6 +14,10 @@ export class PhysicsEngine {
     this.entities = this.entities.filter(e => e !== entity);
   }
 
+  clear() {
+    this.entities = [];
+  }
+
   update(deltaTime) {
     for (const entity of this.entities) {
       this.applyPhysics(entity, deltaTime);
