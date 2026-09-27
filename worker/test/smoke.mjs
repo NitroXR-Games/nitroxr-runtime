@@ -29,7 +29,8 @@ await check('GET /assets/maze_wall_concrete (seed)', async () => {
   assert(r.status === 200, `status ${r.status}`);
   const b = await r.json();
   assert(b.id === 'maze_wall_concrete', 'id');
-  assert(b.glb_url.startsWith('https://assets.nitroxr.io/'), `glb_url ${b.glb_url}`);
+  assert(b.org === 'nitroxr-games' && b.game === 'maze', 'org/game fields');
+  assert(b.glb_url.includes('/nitroxr-games/maze/models/wall_plain.glb'), `namespaced url ${b.glb_url}`);
 });
 
 await check('GET /assets/nope (404)', async () => {
@@ -43,6 +44,7 @@ await check('POST /assets + GET roundtrip', async () => {
   assert(w.status === 201, `write status ${w.status}`);
   const b = await (await worker.fetch(req('/assets/test_rifle'), env)).json();
   assert(b.glb_url === entry.glb_url, 'glb roundtrip');
+  assert(b.org === 'nitroxr-games' && b.game === 'maze', 'org/game defaults');
 });
 
 await check('POST /submit + GET /leaderboard ordering', async () => {
