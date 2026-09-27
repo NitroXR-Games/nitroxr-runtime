@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export class AssetResolver {
-  constructor(scene) {
+  constructor(scene, endpoint = 'https://api.nitroxr.io') {
     this.scene = scene;
+    this.endpoint = endpoint;
     this.loader = new GLTFLoader();
     this.cache = new Map(); // assetId -> { mesh, material }
     this.loadingQueue = [];
@@ -30,7 +31,8 @@ export class AssetResolver {
 
     try {
       // 1. Query the Cloud Body for metadata
-      const response = await fetch(`${NitroXR.Cloud.endpoint}/assets/${assetId}`);
+      const base = (typeof globalThis !== 'undefined' && globalThis.NitroXR && globalThis.NitroXR.Cloud && globalThis.NitroXR.Cloud.endpoint) || this.endpoint;
+      const response = await fetch(`${base}/assets/${assetId}`);
       if (!response.ok) throw new Error(`Asset ${assetId} not found`);
       
       const metadata = await response.json();

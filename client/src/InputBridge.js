@@ -1,0 +1,132 @@
+export class InputBridge {
+  constructor(renderer = null) {
+    this.renderer = renderer;
+    this.keys = new Set();
+    this._onKeyDown = (e) => this.keys.add(e.code);
+    this._onKeyUp = (e) => this.keys.delete(e.code);
+    this._listening = false;
+
+    if (typeof window !== 'undefined') {
+      this.attachKeyboard();
+    }
+  }
+
+  attachKeyboard() {
+    if (this._listening || typeof window === 'undefined') return;
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+    this._listening = true;
+  }
+
+  dispose() {
+    if (typeof window !== 'undefined' && this._listening) {
+      window.removeEventListener('keydown', this._onKeyDown);
+      window.removeEventListener('keyup', this._onKeyUp);
+      this._listening = false;
+    }
+  }
+
+  isXRPresenting() {
+    try {
+      return !!(this.renderer && this.renderer.xr && this.renderer.xr.isPresenting);
+    } catch {
+      return false;
+    }
+  }
+
+  static async isXRSupported() {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.xr) return false;
+      return await navigator.xr.isSessionSupported('immersive-vr');
+    } catch {
+      return false;
+    }
+  }
+
+  async enterXR(options = {}) {
+    if (!this.renderer) throw new Error('InputBridge: no renderer attached');
+    if (typeof navigator === 'undefined' || !navigator.xr) {
+      throw new Error('InputBridge: WebXR not available in this browser');
+    }
+    const session = await navigator.xr.requestSession('immersive-vr', {
+      optionalFeatures: ['local-floor', 'bounded-floor', ...(options.optionalFeatures || [])]
+    });
+    await this.renderer.xr.setSession(session);
+    return session;
+  }
+
+  _pollXRControllers() {
+    const state = {
+      moveX: 0,
+      moveZ: 0,
+      interact: false,
+      shoot: false,
+      reload: false,
+      changeAvatar: false
+    };
+
+    try {
+      if (!this.isXRPresenting()) return state;
+      const session = this.renderer.xr.getSession();
+      if (!session || !session.inputSources) return state;
+
+      for (const source of session.inputSources) {
+        const gamepad = source.gamepad;
+        if (!gamepad) continue;
+
+        const axes = gamepad.axes || [];
+        const buttons = gamepad.buttons || [];
+
+        // Thumbstick on axes[2]/axes[3] (standard mapping); fall back to axes[0]/axes[1]
+        const ax = axes.length >= 4 ? axes[2] : (axes[0] || 0);
+        const az = axes.length >= 4 ? axes[3] : (axes[1] || 0);
+        if (Math.abs(ax) > 0.15) state.moveX += ax;
+        if (Math.abs(az) > 0.15) state.moveZ += az;
+
+        const pressed = (i) => !!(buttons[i] && buttons[i].pressed);
+        if (pressed(0)) state.shoot = true; // trigger
+        if (pressed(1)) state.reload = true; // squeeze/grip
+        if (pressed(3)) state.interact = true; // thumbstick click
+        if (pressed(4)) state.changeAvatar = true;
+      }
+
+      state.moveX = Math.max(-1, Math.min(1, state.moveX));
+      state.moveZ = Math.max(-1, Math.min(1, state.moveZ));
+    } catch {
+      // XR polling must never throw into the frame loop
+    }
+
+    return state;
+  }
+
+  getInput() {
+    const k = this.keys;
+    const kbForward = k.has('KeyW') || k.has('ArrowUp');
+    const kbBackward = k.has('KeyS') || k.has('ArrowDown');
+    const kbLeft = k.has('KeyA') || k.has('ArrowLeft');
+    const kbRight = k.has('KeyD') || k.has('ArrowRight');
+    const kbInteract = k.has('KeyE') || k.has('Space') || k.has('Enter');
+
+    const xr = this._pollXRControllers();
+    const xrActive = this.isXRPresenting();
+
+    const moveX = (kbRight ? 1 : 0) - (kbLeft ? 1 : 0) + (xr.moveX || 0);
+    const moveZ = (kbBackward ? 1 : 0) - (kbForward ? 1 : 0) + (xr.moveZ || 0);
+
+    return {
+      forward: kbForward || moveZ < -0.15,
+      backward: kbBackward || moveZ > 0.15,
+      left: kbLeft || moveX < -0.15,
+      right: kbRight || moveX > 0.15,
+      moveX: Math.max(-1, Math.min(1, moveX)),
+      moveZ: Math.max(-1, Math.min(1, moveZ)),
+      interact: kbInteract || xr.interact,
+      shoot: xr.shoot,
+      reload: xr.reload,
+      changeAvatar: xr.changeAvatar,
+      toggleEditor: k.has('KeyT'),
+      xrActive,
+      timestamp: Date.now()
+    };
+  }
+}
