@@ -1,16 +1,73 @@
+import * as THREE from 'three';
+
 export class Scene {
-  constructor() {
+  constructor(canvas = null) {
     this.entities = new Map();
-    console.log("NitroXR: Scene initialized");
+    
+    // 1. Setup Three.js Core
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x111111);
+    
+    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.camera.position.set(0, 1.6, 5); // Default eye level
+    
+    this.renderer = new THREE.WebGLRenderer({ 
+      canvas: canvas || document.createElement('canvas'), 
+      antialias: true 
+    });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.xr.enabled = true;
+
+    if (!canvas) {
+      document.body.appendChild(this.renderer.domElement);
+    }
+
+    // 2. Lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 2);
+    this.scene.add(ambientLight);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+    sunLight.position.set(5, 10, 7.5);
+    this.scene.add(sunLight);
+
+    console.log("NitroXR: Visual Scene initialized with Three.js");
   }
 
-  createEntity(id, props) {
+  createEntity(id, props = {}) {
+    const { position = [0, 0, 0], model = 'cube', material = 'default', scale = [1, 1, 1] } = props;
+
+    // Create visual representation
+    let geometry;
+    if (model === 'cube') geometry = new THREE.BoxGeometry(1, 1, 1);
+    else if (model === 'sphere') geometry = new THREE.SphereGeometry(0.5, 32, 32);
+    else geometry = new THREE.BoxGeometry(1, 1, 1); // Fallback
+
+    const materialObj = new THREE.MeshStandardMaterial({ color: 0x808080 });
+    const mesh = new THREE.Mesh(geometry, materialObj);
+    
+    mesh.position.set(...position);
+    mesh.scale.set(...scale);
+    mesh.name = id;
+
+    this.scene.add(mesh);
+
+    // Create the "Brain" entity that links to the "Body" mesh
     const entity = {
       id,
-      ...props,
-      setPosition: (pos) => { entity.position = pos; },
-      update: (newProps) => { Object.assign(entity, newProps); }
+      position,
+      model,
+      material,
+      mesh,
+      setPosition: (pos) => {
+        entity.position = pos;
+        mesh.position.set(...pos);
+      },
+      update: (newProps) => {
+        Object.assign(entity, newProps);
+        if (newProps.position) mesh.position.set(...newProps.position);
+      }
     };
+
     this.entities.set(id, entity);
     return entity;
   }
@@ -20,42 +77,62 @@ export class Scene {
   }
 
   removeEntity(id) {
-    this.entities.delete(id);
+    const entity = this.entities.get(id);
+    if (entity) {
+      this.scene.remove(entity.mesh);
+      this.entities.delete(id);
+    }
   }
 
   clear() {
+    this.entities.forEach(entity => this.scene.remove(entity.mesh));
     this.entities.clear();
   }
 
   render() {
-    // Integration point for Three.js / WebGL
+    this.renderer.render(this.scene, this.camera);
   }
 }
 
 export class Cloud {
+  static endpoint = 'https://api.nitroxr.io';
+  
   static async submit(data) {
-    const response = await fetch(`${this.endpoint}/submit`, {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-    return response.json();
+    try {
+      const response = await fetch(`${this.endpoint}/submit`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      return await response.json();
+    } catch (e) {
+      console.error("Cloud submit failed:", e);
+      return { success: false };
+    }
   }
 
   static async getGhost(userId) {
-    const response = await fetch(`${this.endpoint}/ghost/${userId}`);
-    return response.json();
+    try {
+      const response = await fetch(`${this.endpoint}/ghost/${userId}`);
+      return await response.json();
+    } catch (e) {
+      console.error("Cloud ghost fetch failed:", e);
+      return null;
+    }
   }
-
-  static endpoint = 'https://api.nitroxr.io'; // Configurable via env
 }
 
 export const NitroXR = {
   Scene,
   Cloud,
   onUpdate: (callback) => {
-    setInterval(() => {
-      // Mock input object
-      callback({ forward: true, backward: false, left: false, right: false });
-    }, 16.6);
+    // Standard 60fps loop
+    const tick = () => {
+      callback({ 
+        forward: false, backward: false, left: false, right: false,
+        timestamp: Date.now() 
+      });
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 };
