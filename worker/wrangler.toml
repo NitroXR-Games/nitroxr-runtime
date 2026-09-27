@@ -1,6 +1,11 @@
 name = "nitroxr-runtime-worker"
 main = "index.js"
 compatibility_date = "2024-01-01"
+workers_dev = false
+
+routes = [
+  { pattern = "cloud.nitroxr.com/*", zone_name = "nitroxr.com" }
+]
 
 # KV: asset registry overrides (asset:<id>), scores (score:<game>:<user>),
 # ghost paths (ghost:<game>:<user>). Create with:

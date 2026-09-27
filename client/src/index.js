@@ -173,7 +173,7 @@ export class Scene {
 }
 
 export class Cloud {
-  static endpoint = 'https://api.nitroxr.io';
+  static endpoint = 'https://cloud.nitroxr.com';
 
   static setEndpoint(endpoint) {
     this.endpoint = endpoint;
