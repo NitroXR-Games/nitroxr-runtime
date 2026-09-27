@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export class AssetResolver {
-  constructor(scene, endpoint = 'https://api.nitroxr.io') {
+  constructor(scene, endpoint = 'https://cloud.nitroxr.com') {
     this.scene = scene;
     this.endpoint = endpoint;
     this.loader = new GLTFLoader();

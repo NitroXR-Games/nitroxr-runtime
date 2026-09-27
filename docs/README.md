@@ -110,7 +110,7 @@ The SDK mirrors these in `NitroXR.Cloud`: `setEndpoint`,
 your deployment before booting:
 
 ```javascript
-NitroXR.Cloud.setEndpoint('https://nitroxr-runtime-worker.<you>.workers.dev');
+NitroXR.Cloud.setEndpoint('https://cloud.nitroxr.com');
 ```
 
 ### Deploy checklist (Cloudflare free tier)
