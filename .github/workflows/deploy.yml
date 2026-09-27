@@ -1,0 +1,74 @@
+# Build, test and deploy the NitroXR Runtime to Cloudflare.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN  - token with Workers Scripts (edit), Workers KV
+#                           Storage (edit), Workers R2 Storage (edit)
+#   CLOUDFLARE_ACCOUNT_ID - account id from the Cloudflare dashboard
+#
+# Required before the deploy job can succeed:
+#   - real KV namespace id in worker/wrangler.toml (NITRO_KV binding)
+#   - R2 bucket `nitroxr-games-assets` exists
+#
+# Flow: every push/PR builds + tests. Only pushes to `main` deploy
+# the Worker to production. `development` pushes are build+test only.
+
+name: Build, test and deploy to Cloudflare
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [development, main]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Syntax-check client sources
+        run: |
+          node --check src/index.js
+          node --check src/InputBridge.js
+          node --check src/AssetResolver.js
+          node --check src/PhysicsEngine.js
+        working-directory: client
+
+      - name: Syntax-check worker sources
+        run: |
+          node --check index.js
+          node --check registry.seed.js
+        working-directory: worker
+
+      - name: Worker smoke test (in-memory KV fallback)
+        run: node worker/test/smoke.mjs
+
+      - name: Build client bundle
+        run: npm run build
+        working-directory: client
+
+  deploy-worker:
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Worker to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
