@@ -1,0 +1,17 @@
+{
+  "name": "@nitroxr/runtime",
+  "version": "0.1.0",
+  "description": "The core runtime engine for NitroXR games",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --minify --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  }
+}
