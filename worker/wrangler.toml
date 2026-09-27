@@ -10,10 +10,9 @@ binding = "NITRO_KV"
 id = "your-kv-namespace-id"
 
 # R2: binary .glb + texture storage (free tier: 10GB).
-# Create with: wrangler r2 bucket create nitro-assets
 [[r2_buckets]]
 binding = "NITRO_ASSETS"
-bucket_name = "nitro-assets"
+bucket_name = "nitroxr-games-assets"
 
 [vars]
 # Public base URL for R2 assets (custom domain or r2.dev). Seed registry
