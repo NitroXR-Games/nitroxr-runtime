@@ -65,6 +65,11 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@nitroxr'
 
+      # OIDC registry auth needs a recent npm; the one bundled with
+      # Node 20 predates it (fails with ENEEDAUTH instead of exchanging).
+      - name: Use latest npm
+        run: npm install -g npm@latest && npm --version
+
       - name: Install client dependencies
         run: npm ci
         working-directory: client
