@@ -2,6 +2,10 @@
   "name": "@nitroxr/runtime",
   "version": "0.2.0",
   "description": "The core runtime engine for NitroXR games",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NitroXR-Games/nitroxr-runtime.git"
+  },
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "type": "module",
