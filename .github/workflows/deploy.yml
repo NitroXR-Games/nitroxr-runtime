@@ -48,7 +48,9 @@ jobs:
         working-directory: client
 
       - name: Client unit tests
-        run: node test/audio.mjs
+        run: |
+          node test/audio.mjs
+          node test/input.mjs
         working-directory: client
 
       - name: Syntax-check worker sources

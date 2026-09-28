@@ -4,6 +4,9 @@ export class InputBridge {
     this.keys = new Set();
     this._onKeyDown = (e) => this.keys.add(e.code);
     this._onKeyUp = (e) => this.keys.delete(e.code);
+    // A key held while the tab loses focus never fires keyup, so it would stay
+    // pressed forever and the player would walk into a wall on return.
+    this._onBlur = () => this.keys.clear();
     this._listening = false;
 
     if (typeof window !== 'undefined') {
@@ -15,6 +18,12 @@ export class InputBridge {
     if (this._listening || typeof window === 'undefined') return;
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
+    window.addEventListener('blur', this._onBlur);
+    // Switching tabs does not always fire window blur, but visibilitychange
+    // always fires; cover both.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this._onBlur);
+    }
     this._listening = true;
   }
 
@@ -22,6 +31,10 @@ export class InputBridge {
     if (typeof window !== 'undefined' && this._listening) {
       window.removeEventListener('keydown', this._onKeyDown);
       window.removeEventListener('keyup', this._onKeyUp);
+      window.removeEventListener('blur', this._onBlur);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', this._onBlur);
+      }
       this._listening = false;
     }
   }
