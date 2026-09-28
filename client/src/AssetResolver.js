@@ -67,6 +67,14 @@ export class AssetResolver {
         }
       });
 
+      // 4. Apply registry scale (number = uniform, array = xyz). Calibrates
+      // AI-generated models to world units without touching game code.
+      const s = properties.scale;
+      if (s !== undefined) {
+        const [sx, sy, sz] = Array.isArray(s) ? s : [s, s, s];
+        model.scale.set(sx ?? 1, sy ?? 1, sz ?? 1);
+      }
+
       const asset = { model, metadata };
       this.cache.set(assetId, asset);
       resolve(asset);
