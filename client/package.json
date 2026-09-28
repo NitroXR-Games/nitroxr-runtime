@@ -1,19 +1,22 @@
 {
   "name": "@nitroxr/runtime",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The core runtime engine for NitroXR games",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/NitroXR-Games/nitroxr-runtime.git"
   },
   "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "module": "dist/index.js",
   "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "esbuild src/index.js --bundle --minify --outfile=dist/index.js"
+    "build": "esbuild src/index.js --bundle --minify --format=esm --outfile=dist/index.js"
   },
   "devDependencies": {
     "esbuild": "^0.20.0"
