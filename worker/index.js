@@ -48,12 +48,18 @@ function assetBase(env) {
 function resolveSeed(id, env) {
   const seed = SEED_ASSETS[id];
   if (!seed) return null;
-  const base = assetBase(env);
+  return templateEntry(seed, assetBase(env));
+}
+
+// Expands {{ASSET_BASE}} in every URL field. Applied to seeds AND to entries
+// read back from KV, so a registered asset behaves exactly like a seeded one.
+function templateEntry(entry, base) {
+  const sub = (v) => (typeof v === 'string' ? v.replace('{{ASSET_BASE}}', base) : v ?? null);
   return {
-    ...seed,
-    glb_url: seed.glb_url ? seed.glb_url.replace('{{ASSET_BASE}}', base) : null,
-    texture_url: seed.texture_url ? seed.texture_url.replace('{{ASSET_BASE}}', base) : null,
-    audio_url: seed.audio_url ? seed.audio_url.replace('{{ASSET_BASE}}', base) : null
+    ...entry,
+    glb_url: sub(entry.glb_url),
+    texture_url: sub(entry.texture_url),
+    audio_url: sub(entry.audio_url)
   };
 }
 
@@ -81,7 +87,9 @@ export default {
 
     // ---- Asset registry ----
     if (request.method === 'GET' && path === '/assets') {
-      const assets = { ...SEED_ASSETS };
+      const base = assetBase(env);
+      const assets = {};
+      // KV entries win over seeds, matching GET /assets/:id.
       try {
         const { keys } = await store.list({ prefix: 'asset:' });
         for (const { name } of keys) {
@@ -89,20 +97,25 @@ export default {
           if (!raw) continue;
           try {
             const entry = JSON.parse(raw);
-            if (entry && entry.id) assets[entry.id] = entry;
+            if (entry && entry.id) assets[entry.id] = templateEntry(entry, base);
           } catch { /* skip corrupt entries */ }
         }
       } catch { /* KV list unavailable: seeds only */ }
-      return json({ assets: Object.values(assets).map(a => resolveSeed(a.id, env) || a) });
+      // Only seed ids that were NOT overridden above.
+      for (const [id, seed] of Object.entries(SEED_ASSETS)) {
+        if (!(id in assets)) assets[id] = templateEntry(seed, base);
+      }
+      return json({ assets: Object.values(assets) });
     }
 
     if (request.method === 'GET' && path.startsWith('/assets/')) {
       const id = decodeURIComponent(path.slice('/assets/'.length));
       if (!id) return json({ error: 'Asset id required' }, 400);
+      const base = assetBase(env);
       const raw = await store.get(`asset:${id}`);
       if (raw) {
         try {
-          return json(JSON.parse(raw));
+          return json(templateEntry(JSON.parse(raw), base));
         } catch {
           return json({ error: 'Corrupt registry entry', id }, 500);
         }
@@ -110,6 +123,15 @@ export default {
       const seed = resolveSeed(id, env);
       if (seed) return json(seed);
       return json({ error: 'Asset not found', id }, 404);
+    }
+
+    // Remove an override and fall back to the seed. Without this a registered
+    // asset shadows its seed forever with no way back.
+    if (request.method === 'DELETE' && path.startsWith('/assets/')) {
+      const id = decodeURIComponent(path.slice('/assets/'.length));
+      if (!id) return json({ error: 'Asset id required' }, 400);
+      await store.delete(`asset:${id}`);
+      return json({ deleted: true, id, seeded: !!SEED_ASSETS[id] });
     }
 
     if (path === '/assets') {
@@ -124,6 +146,9 @@ export default {
         game: body.game || body.gameId || 'maze',
         glb_url: body.glb_url || body.model_url || null,
         texture_url: body.texture_url || null,
+        // Was silently dropped, making audio second-class: the only way to
+        // register it was editing the seed file and redeploying the Worker.
+        audio_url: body.audio_url || null,
         properties: body.properties || {},
         priority: body.priority ?? 4,
         description: body.description || '',
@@ -132,7 +157,7 @@ export default {
         id: body.id
       };
       await store.put(`asset:${body.id}`, JSON.stringify(entry));
-      return json(entry, 201);
+      return json(templateEntry(entry, assetBase(env)), 201);
     }
 
     // ---- Scores / leaderboard ----
