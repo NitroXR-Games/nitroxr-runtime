@@ -121,10 +121,43 @@ NitroXR.Cloud.setEndpoint('https://cloud.nitroxr.com');
 ### Deploy checklist (Cloudflare free tier)
 
 1. `wrangler kv:namespace create NITRO_KV` → put the id in `worker/wrangler.toml`
-2. `wrangler r2 bucket create nitro-assets` → upload `.glb`/textures
+2. `wrangler r2 bucket create nitroxr-games-assets` → upload `.glb`/textures
+   under `{org}/{game}/...`
 3. Set `ASSET_BASE_URL` in `worker/wrangler.toml` to the public R2 base
-4. `wrangler deploy` from `worker/`
+4. `wrangler deploy` from `worker/` (or merge to `main` — CI deploys)
 5. Optional: seed/override entries via `POST /assets`
+
+## 3c. Ghost Replay (Lap 6)
+
+Async racing without realtime networking. Record the local run, upload the
+compressed payload, race a rival's ghost later:
+
+```javascript
+import { NitroXR, GhostRecorder, GhostPlayer } from '@nitroxr/runtime';
+
+// Record at 10Hz during play
+const recorder = new GhostRecorder({ hz: 10 });
+scene.startLoop((input) => {
+  // ... movement ...
+  recorder.sample(player.position);
+  scene.update(input.deltaTime);
+});
+
+// Finish: upload (~19% of raw JSON via mm-quantized deltas, format v1)
+await NitroXR.Cloud.submitGhost('me', recorder.toPayload(), 'maze');
+
+// Race: fetch + play back on a translucent entity
+const ghost = await scene.createEntity('ghost-rival', { model: 'maze_ghost' });
+const player2 = new GhostPlayer(ghost, { loop: true });
+player2.load(await NitroXR.Cloud.getGhost('pro_player_1', 'maze'));
+player2.play();
+scene.startLoop((input) => {
+  player2.update(); // O(1) amortized, interpolated between samples
+  scene.update(input.deltaTime);
+});
+```
+
+Raw point arrays also load (back-compat); unknown format versions throw.
 
 ## 4. Performance Guardrails
 

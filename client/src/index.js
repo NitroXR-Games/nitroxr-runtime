@@ -256,6 +256,8 @@ export class Cloud {
 }
 
 export { InputBridge };
+import { GhostRecorder, GhostPlayer, compressPath, decompressPath } from './GhostReplay.js';
+export { GhostRecorder, GhostPlayer, compressPath, decompressPath };
 
 // Shared keyboard-only bridge for the legacy global loop (desktop testing
 // without a Scene instance). Scene instances use their own renderer-bound bridge.
@@ -269,6 +271,8 @@ export const NitroXR = {
   Scene,
   Cloud,
   InputBridge,
+  GhostRecorder,
+  GhostPlayer,
   onUpdate: (callback) => {
     const tick = () => {
       const now = Date.now();
