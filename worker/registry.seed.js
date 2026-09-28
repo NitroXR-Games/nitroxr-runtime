@@ -137,5 +137,15 @@ export const SEED_ASSETS = {
     properties: { loop: false, volume: 0.5, category: 'sfx' },
     priority: 7,
     description: 'Wall collision sound'
+  },
+  maze_awareness: {
+    id: 'maze_awareness',
+    org: ORG,
+    game: GAME,
+    type: 'audio',
+    audio_url: `${NS}/audio/AwarenessSV2.ogg`,
+    properties: { loop: true, volume: 0.4, category: 'music' },
+    priority: 5,
+    description: 'Awareness ambient theme'
   }
 };
