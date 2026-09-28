@@ -61,12 +61,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
           scope: '@nitroxr'
 
-      # OIDC registry auth needs a recent npm; the one bundled with
-      # Node 20 predates it (fails with ENEEDAUTH instead of exchanging).
+      # OIDC registry auth needs npm 11+; the npm bundled with Node 20
+      # predates it (ENEEDAUTH), and npm 12 requires Node 22+.
       - name: Use latest npm
         run: npm install -g npm@latest && npm --version
 
