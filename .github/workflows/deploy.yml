@@ -43,6 +43,15 @@ jobs:
           node --check src/InputBridge.js
           node --check src/AssetResolver.js
           node --check src/PhysicsEngine.js
+          node --check src/AudioManager.js
+          node --check src/GhostReplay.js
+        working-directory: client
+
+      - name: Client unit tests
+        run: |
+          node test/audio.mjs
+          node test/input.mjs
+          node test/assets.mjs
         working-directory: client
 
       - name: Syntax-check worker sources

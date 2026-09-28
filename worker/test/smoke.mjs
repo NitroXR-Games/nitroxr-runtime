@@ -81,5 +81,57 @@ await check('OPTIONS preflight', async () => {
   assert(r.headers.get('Access-Control-Allow-Origin') === '*', 'cors header');
 });
 
+const post = (path, body) => req(path, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+});
+
+await check('POST /assets persists audio_url', async () => {
+  const r = await worker.fetch(post('/assets', {
+    id: 'smoke_audio', type: 'audio', audio_url: 'https://cdn.example/smoke.ogg'
+  }), env);
+  assert(r.status === 201, `status ${r.status}`);
+  const back = await (await worker.fetch(req('/assets/smoke_audio'), env)).json();
+  assert(back.audio_url === 'https://cdn.example/smoke.ogg', `audio_url lost: ${JSON.stringify(back)}`);
+});
+
+await check('POST /assets templates {{ASSET_BASE}} in stored URLs', async () => {
+  await worker.fetch(post('/assets', {
+    id: 'smoke_tmpl', glb_url: '{{ASSET_BASE}}/x/y.glb'
+  }), env);
+  const back = await (await worker.fetch(req('/assets/smoke_tmpl'), env)).json();
+  assert(!back.glb_url.includes('{{ASSET_BASE}}'), `untemplated: ${back.glb_url}`);
+});
+
+await check('GET /assets and GET /assets/:id agree on a KV override', async () => {
+  await worker.fetch(post('/assets', {
+    id: 'maze_wall_concrete', glb_url: 'https://cdn.example/OVR.glb', description: 'override'
+  }), env);
+  const single = await (await worker.fetch(req('/assets/maze_wall_concrete'), env)).json();
+  const list = await (await worker.fetch(req('/assets'), env)).json();
+  const inList = list.assets.find(a => a.id === 'maze_wall_concrete');
+  assert(single.description === 'override', 'single GET lost the override');
+  assert(inList && inList.description === 'override',
+    `list disagrees with single GET: ${inList && inList.description}`);
+  await worker.fetch(req('/assets/maze_wall_concrete', { method: 'DELETE' }), env);
+});
+
+await check('DELETE /assets/:id removes an override and restores the seed', async () => {
+  await worker.fetch(post('/assets', {
+    id: 'maze_floor_tile', glb_url: 'https://cdn.example/OVR.glb', description: 'override'
+  }), env);
+  const d = await worker.fetch(req('/assets/maze_floor_tile', { method: 'DELETE' }), env);
+  assert(d.status === 200, `delete status ${d.status}`);
+  const back = await (await worker.fetch(req('/assets/maze_floor_tile'), env)).json();
+  assert(back.description !== 'override', 'override survived deletion — seed is shadowed forever');
+  assert(back.description === 'Dark metallic floor tile, seamless tiling', 'seed should be back');
+});
+
+await check('every seeded URL field is templated', async () => {
+  const list = await (await worker.fetch(req('/assets'), env)).json();
+  const leaks = list.assets.filter(a =>
+    [a.glb_url, a.texture_url, a.audio_url].some(u => typeof u === 'string' && u.includes('{{ASSET_BASE}}')));
+  assert(leaks.length === 0, `untemplated seeds: ${leaks.map(a => a.id).join(', ')}`);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
