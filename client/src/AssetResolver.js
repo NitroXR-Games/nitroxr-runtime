@@ -7,6 +7,7 @@ export class AssetResolver {
     this.endpoint = endpoint;
     this.loader = new GLTFLoader();
     this.cache = new Map(); // assetId -> { mesh, material }
+    this.inflight = new Map(); // assetId -> shared promise (dedupes concurrent resolves)
     this.loadingQueue = [];
     this.isProcessing = false;
   }
@@ -15,12 +16,19 @@ export class AssetResolver {
     if (this.cache.has(assetId)) {
       return this.cache.get(assetId);
     }
-
-    return new Promise((resolve) => {
-      this.loadingQueue.push({ assetId, priority, resolve });
-      this.loadingQueue.sort((a, b) => a.priority - b.priority);
-      this.processQueue();
-    });
+    // Concurrent callers for the same id share one fetch + one GLB load
+    // instead of each queueing their own (e.g. 100 maze walls, 1 fetch).
+    if (!this.inflight.has(assetId)) {
+      const pending = new Promise((resolve) => {
+        this.loadingQueue.push({ assetId, priority, resolve });
+        this.loadingQueue.sort((a, b) => a.priority - b.priority);
+        this.processQueue();
+      }).finally(() => {
+        this.inflight.delete(assetId);
+      });
+      this.inflight.set(assetId, pending);
+    }
+    return this.inflight.get(assetId);
   }
 
   async processQueue() {
