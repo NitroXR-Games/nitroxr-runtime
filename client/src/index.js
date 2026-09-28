@@ -42,6 +42,7 @@ export class Scene {
     // 2. Input + assets (Brain wiring)
     this.inputBridge = new InputBridge(this.renderer);
     this.assetResolver = new AssetResolver(this, Cloud.endpoint);
+    this.audio = new AudioManager();
 
     // 3. Lighting
     const ambientLight = new THREE.AmbientLight(0x404040, 2);
@@ -260,6 +261,8 @@ export class Cloud {
 export { InputBridge };
 import { GhostRecorder, GhostPlayer, compressPath, decompressPath } from './GhostReplay.js';
 export { GhostRecorder, GhostPlayer, compressPath, decompressPath };
+import { AudioManager } from './AudioManager.js';
+export { AudioManager };
 
 // Shared keyboard-only bridge for the legacy global loop (desktop testing
 // without a Scene instance). Scene instances use their own renderer-bound bridge.
