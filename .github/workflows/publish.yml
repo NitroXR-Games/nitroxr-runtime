@@ -83,5 +83,12 @@ jobs:
         working-directory: client
 
       - name: Publish to npm (OIDC trusted publishing)
-        run: npm publish --provenance --access public
+        # A stale NODE_AUTH_TOKEN anywhere (e.g. org secrets) makes npm send
+        # it INSTEAD of doing the OIDC exchange, which surfaces as a 404 on
+        # scoped PUTs. Scrub auth config so OIDC is the only path.
+        run: |
+          printf 'registry=https://registry.npmjs.org/\n@nitroxr:registry=https://registry.npmjs.org/\n' > ~/.npmrc
+          npm publish --provenance --access public
         working-directory: client
+        env:
+          NODE_AUTH_TOKEN: ''
