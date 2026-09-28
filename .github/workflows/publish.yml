@@ -1,0 +1,83 @@
+# Publish @nitroxr/runtime to npm via OIDC trusted publishing (no tokens).
+#
+# One-time setup on npmjs.com (package Settings -> Trusted Publisher):
+#   publisher GitHub Actions, org NitroXR-Games, repo nitroxr-runtime,
+#   workflow publish.yml. NOTE: the package must exist first — publish
+#   v0.1.0 once from a logged-in shell (`npm publish` in client/),
+#   then all future versions ship from CI.
+#
+# Flow: push a SemVer tag (vMAJOR.MINOR.PATCH) from main after a release PR.
+# The tag MUST match client/package.json version (checked in CI).
+# Manual runs (workflow_dispatch) build + test only, never publish.
+
+name: Publish to npm
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Syntax-check client sources
+        run: |
+          node --check src/index.js
+          node --check src/InputBridge.js
+          node --check src/AssetResolver.js
+          node --check src/PhysicsEngine.js
+          node --check src/GhostReplay.js
+        working-directory: client
+
+      - name: Worker smoke test
+        run: node worker/test/smoke.mjs
+
+      - name: Build client bundle
+        run: npm run build
+        working-directory: client
+
+  publish:
+    needs: build-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          scope: '@nitroxr'
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Tag must match package.json version
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "v${PKG_VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} != package.json v${PKG_VERSION}" >&2
+            exit 1
+          fi
+        working-directory: client
+
+      - name: Publish to npm (OIDC trusted publishing)
+        run: npm publish --provenance --access public
+        working-directory: client
