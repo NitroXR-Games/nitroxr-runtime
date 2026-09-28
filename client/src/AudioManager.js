@@ -1,24 +1,21 @@
-import * as THREE from 'three';
-
+// Web Audio graph owner: master + per-category buses, crossfading music,
+// one-shot SFX and positional sources. Games decide *what* plays *when*; this
+// owns *how* it is mixed.
 export class AudioManager {
   constructor() {
     this.ctx = null;
     this.masterGain = null;
-    this.categoryGains = {
-      music: null,
-      sfx: null,
-      ui: null,
-    };
+    this.categoryGains = { music: null, sfx: null, ui: null };
     this.currentMusic = null;
-    this._gestureHandler = null;
+    this._spatial = new Set();
     this._initialized = false;
   }
 
-  // Must be called after a user gesture (click, keydown, etc.) to satisfy
-  // browser autoplay policy. Call once on first user interaction.
+  // Safe to call repeatedly. Browsers start the context suspended, so playback
+  // only actually begins after the first user gesture resumes it.
   ensureInitialized() {
-    if (this._initialized) return;
-    if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return;
+    if (this._initialized) return this.ctx;
+    if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return null;
 
     this.ctx = new AudioContext();
     this.masterGain = this.ctx.createGain();
@@ -32,65 +29,77 @@ export class AudioManager {
       this.categoryGains[cat] = gain;
     }
 
-    // Resume on first user gesture (required by browser autoplay policy)
     const resume = () => {
-      if (this.ctx.state === 'suspended') this.ctx.resume();
-      window.removeEventListener('click', resume);
-      window.removeEventListener('keydown', resume);
-      window.removeEventListener('touchstart', resume);
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
     };
-    window.addEventListener('click', resume, { once: true });
-    window.addEventListener('keydown', resume, { once: true });
-    window.addEventListener('touchstart', resume, { once: true });
+    for (const evt of ['click', 'keydown', 'touchstart']) {
+      window.addEventListener(evt, resume, { once: true });
+    }
 
     this._initialized = true;
+    return this.ctx;
   }
 
-  // Master volume (0-1)
+  // Master volume 0..1. Lazily initialises so a pre-gesture call is not a
+  // silent no-op.
   setMasterVolume(v) {
+    this.ensureInitialized();
     if (!this.masterGain) return;
     this.masterGain.gain.value = Math.max(0, Math.min(1, v));
   }
 
-  // Category volume (0-1)
   setCategoryVolume(category, v) {
-    if (!this.categoryGains[category]) return;
-    this.categoryGains[category].gain.value = Math.max(0, Math.min(1, v));
+    this.ensureInitialized();
+    const bus = this.categoryGains[category];
+    if (!bus) return;
+    bus.gain.value = Math.max(0, Math.min(1, v));
   }
 
-  // Crossfade between two audio buffers. `from` and `to` can be AudioBufferSourceNode
-  // or buffer references. Returns the new source node.
+  // Fades the current music track out and clears it. Tolerates a source that
+  // has already ended: AudioBufferSourceNode.stop() throws InvalidStateError
+  // on a finished node, which is the common case for loop:false stingers.
+  _stopCurrent(fade) {
+    if (!this.currentMusic || !this.ctx) return;
+    const { source, gain } = this.currentMusic;
+    this.currentMusic = null;
+    if (source._ended) return;
+    try {
+      gain.gain.cancelScheduledValues(this.ctx.currentTime);
+      gain.gain.setValueAtTime(gain.gain.value, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + fade);
+      source.stop(this.ctx.currentTime + fade);
+    } catch {
+      // Node already stopped or never started; nothing to fade.
+    }
+  }
+
   async crossfade(toBuffer, { category = 'music', volume = 1, fade = 1, loop = true } = {}) {
     this.ensureInitialized();
-    if (!this.ctx) return null;
+    if (!this.ctx || !toBuffer) return null;
 
-    // Stop current with fade
-    if (this.currentMusic) {
-      const fromGain = this.currentMusic.gain;
-      fromGain.gain.linearRampToValueAtTime(fromGain.gain.value, this.ctx.currentTime);
-      fromGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + fade);
-      this.currentMusic.source.stop(this.ctx.currentTime + fade);
-    }
+    this._stopCurrent(fade);
 
-    // Start new
     const source = this.ctx.createBufferSource();
     source.buffer = toBuffer;
     source.loop = loop;
+    // Track natural completion so _stopCurrent can skip finished nodes.
+    source._ended = false;
+    source.onended = () => { source._ended = true; };
 
-    const catGain = this.categoryGains[category] || this.categoryGains.music;
+    const bus = this.categoryGains[category] || this.categoryGains.music;
     const sourceGain = this.ctx.createGain();
     sourceGain.gain.value = 0;
-    source.connect(sourceGain).connect(catGain);
+    source.connect(sourceGain).connect(bus);
 
-    sourceGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime);
-    sourceGain.gain.linearRampToValueAtTime(volume, this.ctx.currentTime + fade);
+    const t = this.ctx.currentTime;
+    sourceGain.gain.linearRampToValueAtTime(volume, t + fade);
     source.start();
 
     this.currentMusic = { source, gain: sourceGain, category };
     return source;
   }
 
-  // Play a one-shot sound effect
+  // One-shot sound effect. Returns the source so the caller can stop it early.
   play(buffer, { category = 'sfx', volume = 1, pitch = 1 } = {}) {
     this.ensureInitialized();
     if (!this.ctx || !buffer) return null;
@@ -99,23 +108,28 @@ export class AudioManager {
     source.buffer = buffer;
     source.playbackRate.value = pitch;
 
-    const catGain = this.categoryGains[category] || this.categoryGains.sfx;
+    const bus = this.categoryGains[category] || this.categoryGains.sfx;
     const sourceGain = this.ctx.createGain();
     sourceGain.gain.value = volume;
 
-    source.connect(sourceGain).connect(catGain);
+    source.connect(sourceGain).connect(bus);
     source.start();
     return source;
   }
 
-  // Create a spatial (3D) sound attached to a Three.js Object3D
-  createSpatialSource(buffer, object3D, { category = 'sfx', volume = 1, refDistance = 1, maxDistance = 100, rolloffFactor = 1 } = {}) {
+  // Positional source bound to an object whose .position is (x, y, z).
+  // Its panner is refreshed by update(), which the game loop should call.
+  createSpatialSource(buffer, object3D, {
+    category = 'sfx', volume = 1, refDistance = 1, maxDistance = 100, rolloffFactor = 1
+  } = {}) {
     this.ensureInitialized();
-    if (!this.ctx || !buffer) return null;
+    if (!this.ctx || !buffer || !object3D) return null;
 
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = false;
+    source._ended = false;
+    source.onended = () => { source._ended = true; this._spatial.delete(handle); };
 
     const panner = this.ctx.createPanner();
     panner.panningModel = 'HRTF';
@@ -123,45 +137,68 @@ export class AudioManager {
     panner.refDistance = refDistance;
     panner.maxDistance = maxDistance;
     panner.rolloffFactor = rolloffFactor;
-    panner.positionX.value = object3D.position.x;
-    panner.positionY.value = object3D.position.y;
-    panner.positionZ.value = object3D.position.z;
 
-    const catGain = this.categoryGains[category] || this.categoryGains.sfx;
+    const bus = this.categoryGains[category] || this.categoryGains.sfx;
     const sourceGain = this.ctx.createGain();
-    sourceGain.gain.value = 1;
+    sourceGain.gain.value = volume;
+    source.connect(sourceGain).connect(panner).connect(bus);
 
-    source.connect(sourceGain).connect(panner).connect(catGain);
-
-    // Update panner position from object3D each frame
-    const update = () => {
-      if (!object3D) return;
-      panner.positionX.value = object3D.position.x;
-      panner.positionY.value = object3D.position.y;
-      panner.positionZ.value = object3D.position.z;
+    const handle = {
+      source, panner, object3D,
+      stop: () => {
+        try { source.stop(); } catch { /* already ended */ }
+        this._spatial.delete(handle);
+      }
     };
-
+    this._spatial.add(handle);
+    this._syncSpatial(handle);
     source.start();
-    return { source, panner, update, stop: () => source.stop() };
+    return handle;
   }
 
-  // Load an audio file from URL and return AudioBuffer
+  // Call once per frame to keep positional panners glued to their objects.
+  update() {
+    for (const handle of this._spatial) this._syncSpatial(handle);
+  }
+
+  _syncSpatial(handle) {
+    const p = handle.object3D && handle.object3D.position;
+    if (!p) return;
+    if (handle.panner.positionX) {
+      handle.panner.positionX.value = p.x;
+      handle.panner.positionY.value = p.y;
+      handle.panner.positionZ.value = p.z;
+    } else {
+      handle.panner.setPosition(p.x, p.y, p.z);
+    }
+  }
+
   async loadAudio(url) {
     this.ensureInitialized();
-    if (!this.ctx) return null;
+    if (!this.ctx || !url) return null;
     const res = await fetch(url);
-    const arrayBuffer = await res.arrayBuffer();
-    return this.ctx.decodeAudioData(arrayBuffer);
+    // Without this a 404 HTML error page is handed to decodeAudioData and
+    // we wait for it to throw instead of failing fast.
+    if (!res.ok) throw new Error(`Audio fetch failed: ${res.status} ${url}`);
+    return this.ctx.decodeAudioData(await res.arrayBuffer());
   }
 
-  // Stop all music with fade
   stopMusic(fade = 0.5) {
-    if (this.currentMusic && this.ctx) {
-      const gain = this.currentMusic.gain;
-      gain.gain.linearRampToValueAtTime(gain.gain.value, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + fade);
-      this.currentMusic.source.stop(this.ctx.currentTime + fade);
-      this.currentMusic = null;
+    if (!this.ctx) return;
+    this._stopCurrent(fade);
+  }
+
+  // Close the context and drop every reference. Without this the AudioContext
+  // (and its hardware output) leaks when a scene is torn down.
+  dispose() {
+    this._stopCurrent(0);
+    this._spatial.clear();
+    if (this.ctx && this.ctx.state !== 'closed') {
+      try { this.ctx.close(); } catch { /* already closed */ }
     }
+    this.ctx = null;
+    this.masterGain = null;
+    for (const cat of Object.keys(this.categoryGains)) this.categoryGains[cat] = null;
+    this._initialized = false;
   }
 }
