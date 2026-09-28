@@ -98,46 +98,10 @@ export const SEED_ASSETS = {
     priority: 4,
     description: 'Translucent async-racing ghost entity'
   },
-  maze_theme_level1: {
-    id: 'maze_theme_level1',
-    org: ORG,
-    game: GAME,
-    type: 'audio',
-    audio_url: `${NS}/audio/level1_theme.ogg`,
-    properties: { loop: true, volume: 0.4, category: 'music' },
-    priority: 5,
-    description: 'Level 1 ambient theme'
-  },
-  maze_theme_level2: {
-    id: 'maze_theme_level2',
-    org: ORG,
-    game: GAME,
-    type: 'audio',
-    audio_url: `${NS}/audio/level2_theme.ogg`,
-    properties: { loop: true, volume: 0.4, category: 'music' },
-    priority: 5,
-    description: 'Level 2 ambient theme'
-  },
-  maze_victory: {
-    id: 'maze_victory',
-    org: ORG,
-    game: GAME,
-    type: 'audio',
-    audio_url: `${NS}/audio/victory_stinger.ogg`,
-    properties: { loop: false, volume: 0.7, category: 'music' },
-    priority: 6,
-    description: 'Victory stinger'
-  },
-  maze_sfx_wall_hit: {
-    id: 'maze_sfx_wall_hit',
-    org: ORG,
-    game: GAME,
-    type: 'audio',
-    audio_url: `${NS}/audio/wall_hit.ogg`,
-    properties: { loop: false, volume: 0.5, category: 'sfx' },
-    priority: 7,
-    description: 'Wall collision sound'
-  },
+  // NOTE: only assets whose binary is actually in R2 belong here. Entries for
+  // files that were never uploaded made every consumer pay a 404 plus a failed
+  // decode; the audio type has no placeholder fallback the way models do.
+  // maze_awareness is the one theme with a real .ogg behind it.
   maze_awareness: {
     id: 'maze_awareness',
     org: ORG,
