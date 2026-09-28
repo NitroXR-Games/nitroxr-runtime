@@ -52,7 +52,8 @@ function resolveSeed(id, env) {
   return {
     ...seed,
     glb_url: seed.glb_url ? seed.glb_url.replace('{{ASSET_BASE}}', base) : null,
-    texture_url: seed.texture_url ? seed.texture_url.replace('{{ASSET_BASE}}', base) : null
+    texture_url: seed.texture_url ? seed.texture_url.replace('{{ASSET_BASE}}', base) : null,
+    audio_url: seed.audio_url ? seed.audio_url.replace('{{ASSET_BASE}}', base) : null
   };
 }
 
