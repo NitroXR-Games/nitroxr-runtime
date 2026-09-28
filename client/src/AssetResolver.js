@@ -44,7 +44,15 @@ export class AssetResolver {
       if (!response.ok) throw new Error(`Asset ${assetId} not found`);
       
       const metadata = await response.json();
-      const { glb_url, properties = {} } = metadata;
+      const { glb_url, audio_url, properties = {}, type = 'model' } = metadata;
+
+      // Audio assets: return metadata with URL directly (no GLB load)
+      if (type === 'audio' || audio_url) {
+        const asset = { metadata: { ...metadata, audio_url: audio_url || glb_url } };
+        this.cache.set(assetId, asset);
+        resolve(asset);
+        return;
+      }
 
       // Registry entry without a binary yet (e.g. seed templates before R2
       // upload): use the fallback primitive instead of erroring the loop.

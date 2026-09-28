@@ -97,5 +97,45 @@ export const SEED_ASSETS = {
     properties: { metallic: 0.0, roughness: 0.4, translucent: true },
     priority: 4,
     description: 'Translucent async-racing ghost entity'
+  },
+  maze_theme_level1: {
+    id: 'maze_theme_level1',
+    org: ORG,
+    game: GAME,
+    type: 'audio',
+    audio_url: `${NS}/audio/level1_theme.ogg`,
+    properties: { loop: true, volume: 0.4, category: 'music' },
+    priority: 5,
+    description: 'Level 1 ambient theme'
+  },
+  maze_theme_level2: {
+    id: 'maze_theme_level2',
+    org: ORG,
+    game: GAME,
+    type: 'audio',
+    audio_url: `${NS}/audio/level2_theme.ogg`,
+    properties: { loop: true, volume: 0.4, category: 'music' },
+    priority: 5,
+    description: 'Level 2 ambient theme'
+  },
+  maze_victory: {
+    id: 'maze_victory',
+    org: ORG,
+    game: GAME,
+    type: 'audio',
+    audio_url: `${NS}/audio/victory_stinger.ogg`,
+    properties: { loop: false, volume: 0.7, category: 'music' },
+    priority: 6,
+    description: 'Victory stinger'
+  },
+  maze_sfx_wall_hit: {
+    id: 'maze_sfx_wall_hit',
+    org: ORG,
+    game: GAME,
+    type: 'audio',
+    audio_url: `${NS}/audio/wall_hit.ogg`,
+    properties: { loop: false, volume: 0.5, category: 'sfx' },
+    priority: 7,
+    description: 'Wall collision sound'
   }
 };
