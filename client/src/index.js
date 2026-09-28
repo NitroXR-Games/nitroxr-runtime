@@ -99,6 +99,17 @@ export class Scene {
     let visualModel;
     if (typeof model === 'string' && model !== 'cube' && model !== 'sphere') {
       const asset = await this.assetResolver.resolve(model);
+      // Audio assets resolve to metadata only (no GLB), so a typo that points
+      // an entity at an audio id used to throw "cannot read .clone of
+      // undefined" deep inside three.js. Fail with something actionable.
+      if (!asset || !asset.model) {
+        throw new Error(
+          `Scene.createEntity('${id}'): asset '${model}' has no model. ` +
+          `It resolved as type=${asset && asset.metadata && asset.metadata.type || 'unknown'}` +
+          `${asset && asset.metadata && asset.metadata.audio_url ? ' (audio asset)' : ''}. ` +
+          `Use scene.audio.loadAudio() for audio, or register a model asset.`
+        );
+      }
       visualModel = asset.model.clone();
     } else {
       if (model === 'cube') visualModel = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x808080 }));

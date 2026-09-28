@@ -51,6 +51,7 @@ jobs:
         run: |
           node test/audio.mjs
           node test/input.mjs
+          node test/assets.mjs
         working-directory: client
 
       - name: Syntax-check worker sources

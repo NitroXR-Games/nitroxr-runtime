@@ -46,9 +46,13 @@ export class AssetResolver {
       const metadata = await response.json();
       const { glb_url, audio_url, properties = {}, type = 'model' } = metadata;
 
-      // Audio assets: return metadata with URL directly (no GLB load)
-      if (type === 'audio' || audio_url) {
-        const asset = { metadata: { ...metadata, audio_url: audio_url || glb_url } };
+      // Audio assets carry no GLB, so skip the model load and hand back the
+      // URL. Only treat as audio when there is no model to load — an entry
+      // with both glb_url and audio_url is a model that also has a sound, and
+      // must still resolve its mesh.
+      const isAudio = type === 'audio' || (!!audio_url && !glb_url);
+      if (isAudio) {
+        const asset = { kind: 'audio', metadata: { ...metadata, audio_url: audio_url || glb_url } };
         this.cache.set(assetId, asset);
         resolve(asset);
         return;
