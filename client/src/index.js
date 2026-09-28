@@ -106,7 +106,9 @@ export class Scene {
     }
 
     visualModel.position.set(...position);
-    visualModel.scale.set(...scale);
+    // Multiply (not set): preserves registry calibration from AssetResolver
+    // while still allowing per-entity scale factors (default [1,1,1] = no-op).
+    visualModel.scale.multiply(new THREE.Vector3(...scale));
     visualModel.name = id;
 
     this.scene.add(visualModel);
