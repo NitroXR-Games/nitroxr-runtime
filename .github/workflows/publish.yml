@@ -1,15 +1,14 @@
-# Publish @nitroxr/runtime to npm.
+# Publish @nitroxr/runtime to npm via OIDC trusted publishing (no tokens).
 #
-# Required repository secret (Settings -> Secrets and variables -> Actions):
-#   NPM_TOKEN - granular npm access token with publish rights on the
-#               @nitroxr organization (never expires recommended, or rotate).
+# One-time setup on npmjs.com (package Settings -> Trusted Publisher):
+#   publisher GitHub Actions, org NitroXR-Games, repo nitroxr-runtime,
+#   workflow publish.yml. NOTE: the package must exist first — publish
+#   v0.1.0 once from a logged-in shell (`npm publish` in client/),
+#   then all future versions ship from CI.
 #
 # Flow: push a SemVer tag (vMAJOR.MINOR.PATCH) from main after a release PR.
 # The tag MUST match client/package.json version (checked in CI).
 # Manual runs (workflow_dispatch) build + test only, never publish.
-#
-# First publish needs --access public (scoped packages default to
-# restricted); the flag is harmless on later versions.
 
 name: Publish to npm
 
@@ -79,8 +78,6 @@ jobs:
           fi
         working-directory: client
 
-      - name: Publish to npm
+      - name: Publish to npm (OIDC trusted publishing)
         run: npm publish --provenance --access public
         working-directory: client
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
