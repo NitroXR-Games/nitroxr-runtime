@@ -1,6 +1,6 @@
 {
   "name": "@nitroxr/runtime",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "The core runtime engine for NitroXR games",
   "repository": {
     "type": "git",
