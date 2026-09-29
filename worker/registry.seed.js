@@ -3,12 +3,19 @@
 //
 // MULTI-TENANT KEY CONVENTION (R2 + registry):
 //   {org}/{game}/{kind}/{file}
-// e.g. nitroxr-games/maze/models/wall_plain.glb
+// e.g. nitroxr-games/maze/models/maze_wall_concrete.glb
 //      acme-corp/shooter/textures/metal_panel.jpg
 //
 // Every entry carries `org` + `game`; POST /assets defaults them to
 // nitroxr-games/maze when omitted. A second org/game can never collide
 // with these keys because the namespace prefix is part of the URL.
+//
+// HYGIENE: every glb_url here must name an object that actually exists in R2.
+// These previously pointed at placeholder names (wall_plain.glb,
+// player_base.glb, ...) that all 404, which was invisible only because live
+// KV overrides shadowed them — and DELETE /assets/:id (added in #47) means a
+// wiped KV would fall straight back to the broken seeds. texture_url fields
+// were removed for the same reason: no texture has been uploaded yet.
 const ORG = 'nitroxr-games';
 const GAME = 'maze';
 const NS = `{{ASSET_BASE}}/${ORG}/${GAME}`;
@@ -19,8 +26,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'material',
-    glb_url: `${NS}/models/wall_plain.glb`,
-    texture_url: `${NS}/textures/concrete_wall_4k.jpg`,
+    glb_url: `${NS}/models/maze_wall_concrete.glb`,
     properties: { metallic: 0.2, roughness: 0.8 },
     priority: 2,
     description: 'Legacy maze wall (aliased by maze_wall_concrete)'
@@ -30,8 +36,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'material',
-    glb_url: `${NS}/models/wall_plain.glb`,
-    texture_url: `${NS}/textures/concrete_wall_4k.jpg`,
+    glb_url: `${NS}/models/maze_wall_concrete.glb`,
     properties: { metallic: 0.2, roughness: 0.8 },
     priority: 2,
     description: 'Low-poly concrete maze wall segment with PBR texture'
@@ -41,8 +46,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'material',
-    glb_url: `${NS}/models/floor_tile.glb`,
-    texture_url: `${NS}/textures/floor_tile_dark.jpg`,
+    glb_url: `${NS}/models/maze_floor_tile.glb`,
     properties: { metallic: 0.4, roughness: 0.6 },
     priority: 1,
     description: 'Legacy maze floor (aliased by maze_floor_tile)'
@@ -52,8 +56,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'material',
-    glb_url: `${NS}/models/floor_tile.glb`,
-    texture_url: `${NS}/textures/floor_tile_dark.jpg`,
+    glb_url: `${NS}/models/maze_floor_tile.glb`,
     properties: { metallic: 0.4, roughness: 0.6 },
     priority: 1,
     description: 'Dark metallic floor tile, seamless tiling'
@@ -63,7 +66,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'model',
-    glb_url: `${NS}/models/goal_portal.glb`,
+    glb_url: `${NS}/models/maze_goal_portal.glb`,
     properties: { metallic: 0.1, roughness: 0.3, emissive: true },
     priority: 3,
     description: 'Legacy goal marker (aliased by maze_goal_portal)'
@@ -73,7 +76,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'model',
-    glb_url: `${NS}/models/goal_portal.glb`,
+    glb_url: `${NS}/models/maze_goal_portal.glb`,
     properties: { metallic: 0.1, roughness: 0.3, emissive: true },
     priority: 3,
     description: 'Glowing sci-fi victory portal'
@@ -83,7 +86,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'model',
-    glb_url: `${NS}/models/player_base.glb`,
+    glb_url: `${NS}/models/nitro_player_avatar.glb`,
     properties: { metallic: 0.5, roughness: 0.5 },
     priority: 2,
     description: 'Default XR player avatar drone'
@@ -93,7 +96,7 @@ export const SEED_ASSETS = {
     org: ORG,
     game: GAME,
     type: 'model',
-    glb_url: `${NS}/models/ghost.glb`,
+    glb_url: `${NS}/models/maze_ghost.glb`,
     properties: { metallic: 0.0, roughness: 0.4, translucent: true },
     priority: 4,
     description: 'Translucent async-racing ghost entity'
