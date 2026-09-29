@@ -92,5 +92,24 @@ await check('K and O collide with no existing binding', () => {
   assert(j.moveX === 0 && j.moveZ === 0, `O produced movement: ${j.moveX},${j.moveZ}`);
 });
 
+
+await check('H reports toggleHud and is edge-clearable', () => {
+  const b = new InputBridge(null);
+  b.keys.add('KeyH');
+  assert(b.getInput().toggleHud === true, 'KeyH must report toggleHud');
+  b.keys.clear();
+  assert(b.getInput().toggleHud === false, 'toggleHud must clear on keyup');
+});
+
+await check('H collides with no existing binding', () => {
+  const b = new InputBridge(null);
+  b.keys.add('KeyH');
+  const i = b.getInput();
+  for (const action of ['toggleEditor', 'interact', 'changeAvatar', 'saveLayout', 'loadLayout']) {
+    assert(i[action] !== true, `KeyH must not also trigger ${action}`);
+  }
+  assert(i.moveX === 0 && i.moveZ === 0 && i.turn === 0, `H produced movement: ${JSON.stringify(i)}`);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
