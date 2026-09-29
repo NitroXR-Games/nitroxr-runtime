@@ -2,7 +2,7 @@ import { SEED_ASSETS } from './registry.seed.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type'
 };
 
@@ -61,6 +61,50 @@ function templateEntry(entry, base) {
     texture_url: sub(entry.texture_url),
     audio_url: sub(entry.audio_url)
   };
+}
+
+// Lap 7 layout guardrails. Cells are fed straight into the client's
+// addWall(x, z), so an unvalidated {x: 1e9} places a wall kilometres away and a
+// 1e6-element array locks the main thread. The /ghost/ endpoint validates
+// nothing; layouts are user-authored and replayed, so they get checked.
+const MAX_LAYOUT_CELLS = 2000;
+const MAX_CELL_COORD = 255;
+
+function validateCells(cells) {
+  if (!Array.isArray(cells)) {
+    return { error: 'Body must include `cells`: an array of {x, z} wall positions' };
+  }
+  if (cells.length === 0) return { error: 'A layout needs at least one wall cell' };
+  if (cells.length > MAX_LAYOUT_CELLS) {
+    return { error: `A layout may hold at most ${MAX_LAYOUT_CELLS} cells, got ${cells.length}` };
+  }
+  const seen = new Set();
+  const clean = [];
+  for (const c of cells) {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) {
+      return { error: `Each cell must be an object {x, z}, got ${JSON.stringify(c)}` };
+    }
+    const { x, z } = c;
+    if (!Number.isInteger(x) || !Number.isInteger(z)) {
+      return { error: `Cell coordinates must be integers, got ${JSON.stringify(c)}` };
+    }
+    if (x < 0 || x > MAX_CELL_COORD || z < 0 || z > MAX_CELL_COORD) {
+      return { error: `Cell out of range 0..${MAX_CELL_COORD}: {x: ${x}, z: ${z}}` };
+    }
+    // Duplicates are deduped rather than rejected: a re-saved layout should not
+    // fail just because a client appended the same wall twice.
+    const k = `${x},${z}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    clean.push({ x, z });
+  }
+  return { cells: clean };
+}
+
+// KV keys are built as `${prefix}:${gameId}:${id}`, so an id containing a colon
+// would let a caller write into another game's namespace. Restrict to a slug.
+function validSegment(v) {
+  return typeof v === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(v);
 }
 
 async function readJson(request) {
@@ -220,6 +264,76 @@ export default {
         return json({ success: true, ...record }, 201);
       }
       return methodNotAllowed('GET, POST');
+    }
+
+    // Lap 7: user-authored maze layouts. Mirrors the /ghost/ convention - a
+    // keyed JSON blob scoped by gameId - so layouts survive the browser that
+    // made them, which is the whole point (localStorage dies with the profile).
+    if (path === '/layouts' && request.method === 'GET') {
+      const gameId = url.searchParams.get('gameId') || 'maze';
+      if (!validSegment(gameId)) return json({ error: 'Invalid gameId' }, 400);
+      const prefix = `layout:${gameId}:`;
+      const { keys } = await store.list({ prefix });
+      const layouts = [];
+      for (const k of keys) {
+        const raw = await store.get(k.name);
+        if (!raw) continue;
+        try {
+          const rec = JSON.parse(raw);
+          layouts.push({
+            id: k.name.slice(prefix.length),
+            cells: Array.isArray(rec.cells) ? rec.cells.length : 0,
+            updatedAt: rec.updatedAt || null
+          });
+        } catch { /* skip corrupt entry rather than failing the whole list */ }
+      }
+      return json({ layouts });
+    }
+
+    if (path.startsWith('/layouts/')) {
+      const id = decodeURIComponent(path.slice('/layouts/'.length)).trim();
+      if (!id) return json({ error: 'Layout id required' }, 400);
+      if (!validSegment(id)) {
+        return json({ error: 'Layout id must be 1-64 chars of A-Z a-z 0-9 . _ -' }, 400);
+      }
+      const gameId = url.searchParams.get('gameId') || 'maze';
+      if (!validSegment(gameId)) return json({ error: 'Invalid gameId' }, 400);
+      const key = `layout:${gameId}:${id}`;
+
+      if (request.method === 'GET') {
+        const raw = await store.get(key);
+        if (!raw) return json({ error: 'Layout not found', id, gameId }, 404);
+        try {
+          return json(JSON.parse(raw));
+        } catch {
+          return json({ error: 'Corrupt layout record', id }, 500);
+        }
+      }
+
+      if (request.method === 'POST') {
+        const body = await readJson(request);
+        const v = validateCells(body && body.cells);
+        if (v.error) return json({ error: v.error, id, gameId }, 400);
+        const record = {
+          id, gameId, cells: v.cells, version: 1,
+          createdAt: (body && body.createdAt) || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        const existing = await store.get(key);
+        if (existing) {
+          try { record.createdAt = JSON.parse(existing).createdAt || record.createdAt; } catch { /* keep new */ }
+        }
+        await store.put(key, JSON.stringify(record));
+        return json(record, 201);
+      }
+
+      if (request.method === 'DELETE') {
+        const existed = !!(await store.get(key));
+        await store.delete(key);
+        return json({ deleted: existed, id, gameId });
+      }
+
+      return methodNotAllowed('GET, POST, DELETE');
     }
 
     if (request.method === 'GET' && (path === '/' || path === '')) {
