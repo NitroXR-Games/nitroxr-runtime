@@ -30,7 +30,7 @@ await check('GET /assets/maze_wall_concrete (seed)', async () => {
   const b = await r.json();
   assert(b.id === 'maze_wall_concrete', 'id');
   assert(b.org === 'nitroxr-games' && b.game === 'maze', 'org/game fields');
-  assert(b.glb_url.includes('/nitroxr-games/maze/models/wall_plain.glb'), `namespaced url ${b.glb_url}`);
+  assert(b.glb_url.endsWith('/nitroxr-games/maze/models/maze_wall_concrete.glb'), `namespaced url ${b.glb_url}`);
 });
 
 await check('GET /assets/nope (404)', async () => {
@@ -131,6 +131,22 @@ await check('every seeded URL field is templated', async () => {
   const leaks = list.assets.filter(a =>
     [a.glb_url, a.texture_url, a.audio_url].some(u => typeof u === 'string' && u.includes('{{ASSET_BASE}}')));
   assert(leaks.length === 0, `untemplated seeds: ${leaks.map(a => a.id).join(', ')}`);
+});
+
+await check('seed entries carry no texture_url that was never uploaded', async () => {
+  const list = await (await worker.fetch(req('/assets'), env)).json();
+  // No texture object exists in R2; a texture_url here is a URL that 404s.
+  const withTextures = list.assets.filter(a => a.texture_url);
+  assert(withTextures.length === 0,
+    `seeds still advertise missing textures: ${withTextures.map(a => a.id).join(', ')}`);
+});
+
+await check('every seeded model URL points at the maze_-prefixed object', async () => {
+  const { SEED_ASSETS } = await import('../registry.seed.js');
+  const stale = Object.values(SEED_ASSETS).filter(a =>
+    /\/(wall_plain|floor_tile|goal_portal|player_base|ghost)\.glb$/.test(a.glb_url || ''));
+  assert(stale.length === 0,
+    `seeds still reference placeholder filenames: ${stale.map(a => a.id).join(', ')}`);
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
