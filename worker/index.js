@@ -214,7 +214,11 @@ export default {
         return json({ error: 'Body must include `userId` (string) and `value` (number)' }, 400);
       }
       const gameId = body.gameId || 'maze';
-      const record = { userId, gameId, value, at: new Date().toISOString() };
+      // `steps` is display-only metadata; it must never influence `value`.
+      const record = {
+        userId, gameId, value, at: new Date().toISOString(),
+        ...(Number.isFinite(body.steps) ? { steps: body.steps } : {})
+      };
       await store.put(`score:${gameId}:${userId}`, JSON.stringify(record));
       return json({ success: true, ...record });
     }
@@ -233,8 +237,13 @@ export default {
       } catch {
         return json({ gameId, scores: [] });
       }
-      records.sort((a, b) => (b.value || 0) - (a.value || 0));
-      return json({ gameId, scores: records.slice(0, limit) });
+      // `order=asc` is additive and defaults to the historical descending
+      // sort, so existing consumers are unaffected. A time-trial game needs it:
+      // its score IS the elapsed run time, where fewer seconds must win.
+      const order = (url.searchParams.get('order') || 'desc').toLowerCase();
+      const dir = order === 'asc' ? 1 : -1;
+      records.sort((a, b) => dir * ((a.value || 0) - (b.value || 0)));
+      return json({ gameId, order: dir === 1 ? 'asc' : 'desc', scores: records.slice(0, limit) });
     }
 
     // ---- Ghost paths ----

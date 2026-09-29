@@ -214,12 +214,14 @@ export class Cloud {
     return this.submitScore(data.userId, data.value ?? data.score, data.gameId);
   }
 
-  static async submitScore(userId, value, gameId = 'maze') {
+  // `steps` rides along as display-only metadata; the Worker keeps it out of
+  // `value` so it can never influence the ranking.
+  static async submitScore(userId, value, gameId = 'maze', steps = undefined) {
     try {
       const response = await fetch(`${this.endpoint}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, value, gameId })
+        body: JSON.stringify({ userId, value, gameId, steps })
       });
       return await response.json();
     } catch (e) {
@@ -228,9 +230,12 @@ export class Cloud {
     }
   }
 
-  static async getLeaderboard(gameId = 'maze', limit = 10) {
+  // `order` is 'asc' for time trials (fewer seconds wins) and 'desc' for
+  // points. It maps to the Worker's `order` param, which defaults to 'desc'.
+  static async getLeaderboard(gameId = 'maze', limit = 10, order = 'desc') {
     try {
-      const response = await fetch(`${this.endpoint}/leaderboard/${encodeURIComponent(gameId)}?limit=${limit}`);
+      const q = order === 'asc' ? `?limit=${limit}&order=asc` : `?limit=${limit}`;
+      const response = await fetch(`${this.endpoint}/leaderboard/${encodeURIComponent(gameId)}${q}`);
       return await response.json();
     } catch (e) {
       console.error("Cloud leaderboard fetch failed:", e);
