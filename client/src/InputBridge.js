@@ -152,6 +152,9 @@ export class InputBridge {
       reload: xr.reload,
       changeAvatar: k.has('KeyC') || xr.changeAvatar,
       toggleEditor: k.has('KeyT'),
+      // Hides the HUD and the debug chrome (console mirror, key readout,
+      // telemetry). Level-triggered; the consumer edge-detects it.
+      toggleHud: k.has('KeyH'),
       // Lap 7 editor persistence. These are level-triggered in the consumer
       // (edge-detected there), not here, so a held key cannot re-save 60x/second.
       saveLayout: k.has('KeyK'),
