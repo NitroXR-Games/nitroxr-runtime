@@ -3,6 +3,9 @@ import { AssetResolver } from './AssetResolver.js';
 import { PhysicsEngine } from './PhysicsEngine.js';
 import { InputBridge } from './InputBridge.js';
 
+// Scratch vector reused by getViewYaw().
+const _viewDir = new THREE.Vector3();
+
 export class Scene {
   constructor(canvas = null) {
     this.entities = new Map();
@@ -64,6 +67,20 @@ export class Scene {
 
   getInput() {
     return this.inputBridge.getInput();
+  }
+
+  // World-space yaw of the current view: the headset's heading while
+  // presenting, otherwise the free camera's. Games should use this as the
+  // locomotion basis in XR — driving movement from the avatar's own rotation
+  // makes W move you where the avatar faces, not where you are looking, which
+  // is the classic cause of VR nausea.
+  getViewYaw() {
+    this.camera.getWorldDirection(_viewDir);
+    return Math.atan2(_viewDir.x, _viewDir.z);
+  }
+
+  isPresentingXR() {
+    return !!this.renderer?.xr?.isPresenting;
   }
 
   moveRig(dx, dz) {
