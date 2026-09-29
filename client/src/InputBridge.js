@@ -152,6 +152,10 @@ export class InputBridge {
       reload: xr.reload,
       changeAvatar: k.has('KeyC') || xr.changeAvatar,
       toggleEditor: k.has('KeyT'),
+      // Lap 7 editor persistence. These are level-triggered in the consumer
+      // (edge-detected there), not here, so a held key cannot re-save 60x/second.
+      saveLayout: k.has('KeyK'),
+      loadLayout: k.has('KeyO'),
       xrActive,
       timestamp: Date.now()
     };

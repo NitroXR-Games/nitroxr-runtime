@@ -62,5 +62,35 @@ await check('dispose removes every listener it added', () => {
   assert((doc.listeners.visibilitychange || []).length === 0, 'visibilitychange listener leaked');
 });
 
+
+// --- Lap 7 editor persistence bindings
+await check('K and O report saveLayout/loadLayout and are edge-clearable', () => {
+  const b = new InputBridge(null);
+  b.keys.add('KeyK');
+  assert(b.getInput().saveLayout === true, 'KeyK must report saveLayout');
+  b.keys.clear();
+  assert(b.getInput().saveLayout === false, 'saveLayout must clear on keyup');
+
+  const b2 = new InputBridge(null);
+  b2.keys.add('KeyO');
+  assert(b2.getInput().loadLayout === true, 'KeyO must report loadLayout');
+});
+
+await check('K and O collide with no existing binding', () => {
+  const b = new InputBridge(null);
+  b.keys.add('KeyK');
+  const i = b.getInput();
+  assert(!i.toggleEditor, 'K must not toggle the editor');
+  assert(!i.interact, 'K must not interact');
+  assert(!i.changeAvatar, 'K must not change avatar');
+
+  const b2 = new InputBridge(null);
+  b2.keys.add('KeyO');
+  const j = b2.getInput();
+  assert(!j.toggleEditor && !j.interact && !j.changeAvatar, 'O collides');
+  // O is a movement-adjacent letter; make sure it is not mistaken for strafe.
+  assert(j.moveX === 0 && j.moveZ === 0, `O produced movement: ${j.moveX},${j.moveZ}`);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

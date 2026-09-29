@@ -266,5 +266,50 @@ await check('wrong method on a layout id is 405 with an Allow header', async () 
   assert((r.headers.get('Allow') || '').includes('DELETE'), 'Allow header missing DELETE');
 });
 
+
+await check('order=asc puts the FASTEST time first (time-trial leaderboard)', async () => {
+  for (const [u, v] of [['slow', 300], ['quick', 60], ['middling', 120]]) {
+    await worker.fetch(req('/submit', { method: 'POST', body: JSON.stringify({ userId: u, value: v, gameId: 'race' }) }), env);
+  }
+  const b = await (await worker.fetch(req('/leaderboard/race?order=asc&limit=3'), env)).json();
+  assert(b.order === 'asc', `order echoed as ${b.order}`);
+  assert(b.scores.map(s => s.userId).join(',') === 'quick,middling,slow',
+    `ascending order wrong: ${b.scores.map(s => `${s.userId}:${s.value}`).join(', ')}`);
+});
+
+await check('order=desc remains the default, so existing consumers are unaffected', async () => {
+  const b = await (await worker.fetch(req('/leaderboard/race?limit=3'), env)).json();
+  assert(b.scores[0].userId === 'slow', `default flipped: ${b.scores[0].userId}`);
+  const b2 = await (await worker.fetch(req('/leaderboard/race?order=desc&limit=3'), env)).json();
+  assert(b2.scores[0].userId === 'slow', 'explicit desc wrong');
+  // A junk value must not be treated as ascending.
+  const b3 = await (await worker.fetch(req('/leaderboard/race?order=sideways'), env)).json();
+  assert(b3.order === 'desc', `junk order fell through: ${b3.order}`);
+});
+
+await check('steps are stored as metadata and never become the rank value', async () => {
+  const r = await worker.fetch(req('/submit', { method: 'POST',
+    body: JSON.stringify({ userId: 'meta', value: 90, steps: 9999, gameId: 'race' }) }), env);
+  const rec = await r.json();
+  assert(rec.value === 90, `steps leaked into value: ${rec.value}`);
+  assert(rec.steps === 9999, 'steps not stored');
+  // Same time, wildly different step counts -> identical rank position.
+  await worker.fetch(req('/submit', { method: 'POST',
+    body: JSON.stringify({ userId: 'meta2', value: 90, steps: 1, gameId: 'race' }) }), env);
+  const b = await (await worker.fetch(req('/leaderboard/race?order=asc&limit=10'), env)).json();
+  const idx = b.scores.findIndex(s => s.userId === 'meta');
+  const idx2 = b.scores.findIndex(s => s.userId === 'meta2');
+  assert(idx !== -1 && idx2 !== -1, 'a submission was dropped');
+  assert(b.scores[idx].steps === 9999 && b.scores[idx2].steps === 1, 'metadata lost');
+  // Ties are stable: neither ordering advantage comes from steps.
+  assert(Math.abs(b.scores[idx].value - b.scores[idx2].value) === 0, 'tie broken by steps');
+});
+
+await check('a non-numeric steps is ignored rather than stored as a string', async () => {
+  const rec = await (await worker.fetch(req('/submit', { method: 'POST',
+    body: JSON.stringify({ userId: 'nost', value: 5, steps: 'lots', gameId: 'race' }) }), env)).json();
+  assert(!('steps' in rec), `stored a string step count: ${rec.steps}`);
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
