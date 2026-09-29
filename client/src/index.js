@@ -274,6 +274,56 @@ export class Cloud {
     return response.json();
   }
 
+  // Lap 7: user-authored maze layouts. Unlike ghost paths, saves are NOT
+  // swallowed into a null return - a layout that fails to persist is a lost
+  // piece of work, so the caller is told why and can fall back to localStorage.
+  static async saveLayout(layoutId, cells, gameId = 'maze') {
+    const response = await fetch(
+      `${this.endpoint}/layouts/${encodeURIComponent(layoutId)}?gameId=${encodeURIComponent(gameId)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cells })
+      });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(data?.error || `Layout save failed (${response.status})`);
+    }
+    return data;
+  }
+
+  static async getLayout(layoutId, gameId = 'maze') {
+    const response = await fetch(
+      `${this.endpoint}/layouts/${encodeURIComponent(layoutId)}?gameId=${encodeURIComponent(gameId)}`);
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`Layout fetch failed (${response.status})`);
+    }
+    const record = await response.json();
+    // Callers want the wall cells; the record wraps them in metadata.
+    return Array.isArray(record?.cells) ? record.cells : null;
+  }
+
+  static async listLayouts(gameId = 'maze') {
+    try {
+      const response = await fetch(
+        `${this.endpoint}/layouts?gameId=${encodeURIComponent(gameId)}`);
+      if (!response.ok) return { layouts: [] };
+      return await response.json();
+    } catch (e) {
+      console.error("Cloud layout list failed:", e);
+      return { layouts: [] };
+    }
+  }
+
+  static async deleteLayout(layoutId, gameId = 'maze') {
+    const response = await fetch(
+      `${this.endpoint}/layouts/${encodeURIComponent(layoutId)}?gameId=${encodeURIComponent(gameId)}`,
+      { method: 'DELETE' });
+    if (!response.ok) throw new Error(`Layout delete failed (${response.status})`);
+    return response.json();
+  }
+
   static async getGhost(userId, gameId = 'maze') {
     try {
       const response = await fetch(`${this.endpoint}/ghost/${encodeURIComponent(userId)}?gameId=${encodeURIComponent(gameId)}`);
