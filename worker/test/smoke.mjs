@@ -149,5 +149,122 @@ await check('every seeded model URL points at the maze_-prefixed object', async 
     `seeds still reference placeholder filenames: ${stale.map(a => a.id).join(', ')}`);
 });
 
+
+// ---------------------------------------------------------------- Lap 7
+
+// The DELETE tests above all call worker.fetch() directly, which BYPASSES CORS
+// - so they were green while the feature was unreachable from a browser.
+// A real preflight is the only thing that catches a missing Allow-Methods.
+await check('CORS preflight permits DELETE (browsers block it otherwise)', async () => {
+  const r = await worker.fetch(req('/layouts/a', { method: 'OPTIONS' }), env);
+  assert(r.status === 204, `status ${r.status}`);
+  const allow = r.headers.get('Access-Control-Allow-Methods') || '';
+  assert(allow.includes('DELETE'), `Allow-Methods lacks DELETE: "${allow}"`);
+  assert(allow.includes('OPTIONS'), `Allow-Methods lacks OPTIONS: "${allow}"`);
+});
+
+const good = { cells: [{ x: 1, z: 1 }, { x: 2, z: 3 }] };
+const postLayout = (id, body, gameId = 'maze') =>
+  req(`/layouts/${id}?gameId=${gameId}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+await check('POST then GET round-trips a layout', async () => {
+  const created = await (await worker.fetch(postLayout('t1', good), env)).json();
+  assert(created.id === 't1' && created.gameId === 'maze', 'echoes id/gameId');
+  assert(created.cells.length === 2, 'keeps cells');
+  assert(created.updatedAt, 'stamps updatedAt');
+  const got = await (await worker.fetch(req('/layouts/t1?gameId=maze'), env)).json();
+  assert(got.cells.length === 2 && got.cells[1].x === 2, `round-trip mismatch: ${JSON.stringify(got.cells)}`);
+});
+
+await check('layouts are scoped per gameId', async () => {
+  await worker.fetch(postLayout('shared', { cells: [{ x: 9, z: 9 }] }, 'maze'), env);
+  const other = await worker.fetch(req('/layouts/shared?gameId=other'), env);
+  assert(other.status === 404, `leaked across games: ${other.status}`);
+});
+
+await check('missing layout is a 404, not a crash', async () => {
+  const r = await worker.fetch(req('/layouts/nope'), env);
+  assert(r.status === 404, `status ${r.status}`);
+});
+
+await check('POST rejects a non-array cells field', async () => {
+  const r = await worker.fetch(postLayout('bad1', { cells: 'walls' }), env);
+  assert(r.status === 400, `status ${r.status}`);
+});
+
+await check('POST rejects fractional coordinates (they would offset the mesh)', async () => {
+  const r = await worker.fetch(postLayout('bad2', { cells: [{ x: 1.5, z: 2 }] }), env);
+  assert(r.status === 400, `status ${r.status}`);
+});
+
+await check('POST rejects out-of-range coordinates', async () => {
+  for (const c of [{ x: -1, z: 0 }, { x: 0, z: 1e9 }, { x: 999, z: 0 }]) {
+    const r = await worker.fetch(postLayout('bad3', { cells: [c] }), env);
+    assert(r.status === 400, `{${c.x},${c.z}} was accepted`);
+  }
+});
+
+await check('POST rejects null, strings and arrays masquerading as cells', async () => {
+  for (const cells of [[null], ['ab'], [[1, 2]], [3]]) {
+    const r = await worker.fetch(postLayout('bad4', { cells }), env);
+    assert(r.status === 400, `${JSON.stringify(cells)} was accepted`);
+  }
+});
+
+await check('POST rejects an empty layout', async () => {
+  const r = await worker.fetch(postLayout('bad5', { cells: [] }), env);
+  assert(r.status === 400, `status ${r.status}`);
+});
+
+await check('POST caps the cell count', async () => {
+  const many = Array.from({ length: 2001 }, (_, i) => ({ x: i % 255, z: 0 }));
+  const r = await worker.fetch(postLayout('bad6', { cells: many }), env);
+  assert(r.status === 400, `oversized layout accepted`);
+});
+
+await check('POST dedupes repeated cells', async () => {
+  const r = await (await worker.fetch(postLayout('dup', { cells: [{ x: 4, z: 4 }, { x: 4, z: 4 }] }), env)).json();
+  assert(r.cells.length === 1, `expected 1 cell, got ${r.cells.length}`);
+});
+
+await check('re-saving preserves createdAt but moves updatedAt', async () => {
+  const first = await (await worker.fetch(postLayout('ts', good), env)).json();
+  await new Promise(r => setTimeout(r, 5));
+  const second = await (await worker.fetch(postLayout('ts', { cells: [{ x: 5, z: 5 }] }), env)).json();
+  assert(second.createdAt === first.createdAt, 'createdAt was clobbered');
+  assert(second.updatedAt >= first.updatedAt, 'updatedAt did not advance');
+  assert(second.cells[0].x === 5, 'cells not replaced');
+});
+
+await check('ids with a colon cannot escape into another namespace', async () => {
+  const r = await worker.fetch(postLayout('evil%3Amaze%3Ax', good), env);
+  assert(r.status === 400, `colon id accepted: ${r.status}`);
+});
+
+await check('GET /layouts lists ids and cell counts', async () => {
+  const { layouts } = await (await worker.fetch(req('/layouts?gameId=maze'), env)).json();
+  const t1 = layouts.find(l => l.id === 't1');
+  assert(t1, `t1 missing from ${JSON.stringify(layouts.map(l => l.id))}`);
+  assert(t1.cells === 2, `cell count ${t1.cells}`);
+});
+
+await check('DELETE removes a layout and reports whether it existed', async () => {
+  const d = await (await worker.fetch(req('/layouts/t1?gameId=maze', { method: 'DELETE' }), env)).json();
+  assert(d.deleted === true, 'expected deleted:true');
+  const again = await (await worker.fetch(req('/layouts/t1?gameId=maze', { method: 'DELETE' }), env)).json();
+  assert(again.deleted === false, 'idempotent delete must report deleted:false');
+  const gone = await worker.fetch(req('/layouts/t1?gameId=maze'), env);
+  assert(gone.status === 404, `still readable: ${gone.status}`);
+});
+
+await check('wrong method on a layout id is 405 with an Allow header', async () => {
+  const r = await worker.fetch(req('/layouts/t1', { method: 'PUT' }), env);
+  assert(r.status === 405, `status ${r.status}`);
+  assert((r.headers.get('Allow') || '').includes('DELETE'), 'Allow header missing DELETE');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
